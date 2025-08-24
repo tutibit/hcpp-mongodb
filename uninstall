@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# MongoDB Admin Plugin Uninstall Script
+# This script DOES NOT uninstall MongoDB - only removes the plugin
+
+echo "Uninstalling MongoDB Admin Plugin from HestiaCP..."
+
+# Remove MongoDB Adminer driver
+ADMINER_DIR="/usr/local/hestia/web/adminer"
+if [ -f "$ADMINER_DIR/mongo.php" ]; then
+    rm -f "$ADMINER_DIR/mongo.php"
+    echo "✅ MongoDB Adminer driver removed"
+else
+    echo "ℹ️ MongoDB Adminer driver not found"
+fi
+
+echo "✅ MongoDB Admin Plugin uninstalled successfully!"
+echo ""
+echo "Note: MongoDB itself was NOT uninstalled."
+echo "To uninstall MongoDB completely:"
+echo "1. sudo systemctl stop mongod"
+echo "2. sudo apt remove --purge mongodb-org*"
+echo "3. sudo rm -rf /var/lib/mongodb"
+echo "4. sudo rm -rf /var/log/mongodb"

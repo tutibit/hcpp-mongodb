@@ -1,0 +1,210 @@
+#!/bin/bash
+
+# MongoDB Admin Plugin Install Script
+# This script DOES NOT install MongoDB - it must be installed manually first
+
+echo "Installing MongoDB Admin Plugin for HestiaCP..."
+
+# Check if HestiaCP is installed
+if [ ! -d "/usr/local/hestia" ]; then
+    echo "ERROR: HestiaCP not found. Please install HestiaCP first."
+    exit 1
+fi
+
+# Check if MongoDB is installed
+if ! command -v mongod >/dev/null 2>&1; then
+    echo "ERROR: MongoDB not found."
+    echo ""
+    echo "Please install MongoDB first:"
+    echo "1. Install MongoDB manually:"
+    echo "   https://docs.mongodb.com/manual/installation/"
+    echo "2. Start MongoDB service:"
+    echo "   sudo systemctl start mongod"
+    echo "   sudo systemctl enable mongod"
+    echo "3. Install PHP MongoDB extension:"
+    echo "   sudo apt install php-mongodb"
+    echo "4. Restart PHP-FPM:"
+    echo "   sudo systemctl restart php*-fpm"
+    echo ""
+    echo "Then run this install script again."
+    exit 1
+fi
+
+# Check if MongoDB is running
+if ! systemctl is-active --quiet mongod && ! systemctl is-active --quiet mongodb; then
+    echo "ERROR: MongoDB is not running."
+    echo "Start MongoDB with: sudo systemctl start mongod"
+    exit 1
+fi
+
+# Check if PHP MongoDB extension is installed
+if ! php -m | grep -q mongodb; then
+    echo "ERROR: PHP MongoDB extension not found."
+    echo "Install with: sudo apt install php-mongodb"
+    echo "Then restart PHP-FPM: sudo systemctl restart php*-fpm"
+    exit 1
+fi
+
+# Setup Adminer with MongoDB support
+ADMINER_DIR="/usr/local/hestia/web/adminer"
+PLUGIN_DIR="$(dirname "$0")"
+
+# Create Adminer directory
+if [ ! -d "$ADMINER_DIR" ]; then
+    mkdir -p "$ADMINER_DIR"
+fi
+
+# Copy MongoDB driver
+cp "$PLUGIN_DIR/mongo.php" "$ADMINER_DIR/"
+chmod 644 "$ADMINER_DIR/mongo.php"
+
+# Create or update Adminer index with MongoDB support
+cat > "$ADMINER_DIR/index.php" << 'EOF'
+<?php
+// Adminer with MongoDB support for HestiaCP
+namespace Adminer;
+
+// Include MongoDB driver
+require_once __DIR__ . '/mongo.php';
+
+// Basic Adminer functionality
+function adminer() {
+    return new class {
+        function credentials() {
+            return array($_POST['server'] ?? 'localhost:27017', $_POST['username'] ?? '', $_POST['password'] ?? '');
+        }
+        
+        function database() {
+            return $_POST['db'] ?? $_GET['db'] ?? '';
+        }
+    };
+}
+
+function h($text) {
+    return htmlspecialchars($text);
+}
+
+// Simple login form for MongoDB
+if (!isset($_GET['mongo']) && !isset($_POST['server'])) {
+    echo '<!DOCTYPE html>
+<html>
+<head>
+    <title>Database Administration</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { padding: 10px 20px; margin: 10px; text-decoration: none; background: #007cba; color: white; border-radius: 3px; display: inline-block; }
+        .mongodb { background: #4DB33D; }
+    </style>
+</head>
+<body>
+    <h2>Database Administration</h2>
+    <a href="?mongo=" class="button mongodb">MongoDB Administration</a>
+    <p><small>Access MongoDB collections and documents</small></p>
+</body>
+</html>';
+    exit;
+}
+
+// MongoDB interface
+if (isset($_GET['mongo'])) {
+    echo '<!DOCTYPE html>
+<html>
+<head>
+    <title>MongoDB Administration</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .form-group { margin: 10px 0; }
+        label { display: inline-block; width: 100px; }
+        input { padding: 5px; margin: 5px; }
+        button { padding: 8px 16px; background: #4DB33D; color: white; border: none; cursor: pointer; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h2>MongoDB Administration</h2>
+    
+    <form method="post">
+        <input type="hidden" name="mongo" value="1">
+        <div class="form-group">
+            <label>Server:</label>
+            <input type="text" name="server" value="' . h($_POST['server'] ?? 'localhost:27017') . '" placeholder="localhost:27017">
+        </div>
+        <div class="form-group">
+            <label>Username:</label>
+            <input type="text" name="username" value="' . h($_POST['username'] ?? '') . '" placeholder="Optional">
+        </div>
+        <div class="form-group">
+            <label>Password:</label>
+            <input type="password" name="password" placeholder="Optional">
+        </div>
+        <div class="form-group">
+            <label>Database:</label>
+            <input type="text" name="db" value="' . h($_POST['db'] ?? '') . '" placeholder="Optional">
+        </div>
+        <button type="submit">Connect to MongoDB</button>
+    </form>';
+
+    // Handle connection attempt
+    if ($_POST && extension_loaded('mongodb')) {
+        try {
+            $server = $_POST['server'] ?? 'localhost:27017';
+            $username = $_POST['username'] ?? '';
+            $password = $_POST['password'] ?? '';
+            $database = $_POST['db'] ?? '';
+            
+            $options = [];
+            if ($username && $password) {
+                $options['username'] = $username;
+                $options['password'] = $password;
+            }
+            if ($database) {
+                $options['db'] = $database;
+            }
+            
+            $manager = new \MongoDB\Driver\Manager("mongodb://$server", $options);
+            $command = new \MongoDB\Driver\Command(['ping' => 1]);
+            $manager->executeCommand($database ?: 'admin', $command);
+            
+            echo '<div class="status success">✅ Connected to MongoDB successfully!</div>';
+            
+            // List databases
+            $listDbs = new \MongoDB\Driver\Command(['listDatabases' => 1]);
+            $result = $manager->executeCommand('admin', $listDbs);
+            $databases = current($result->toArray())->databases;
+            
+            echo '<h3>Databases:</h3><ul>';
+            foreach ($databases as $db) {
+                echo '<li><strong>' . h($db->name) . '</strong> (' . number_format($db->sizeOnDisk ?? 0) . ' bytes)</li>';
+            }
+            echo '</ul>';
+            
+        } catch (Exception $e) {
+            echo '<div class="status error">❌ Connection failed: ' . h($e->getMessage()) . '</div>';
+        }
+    } elseif ($_POST) {
+        echo '<div class="status error">❌ MongoDB PHP extension not loaded</div>';
+    }
+    
+    echo '</body></html>';
+    exit;
+}
+?>
+EOF
+
+# Set proper permissions
+chmod 644 "$ADMINER_DIR/index.php"
+chown -R admin:admin "$ADMINER_DIR"
+
+echo "✅ MongoDB Admin Plugin installed successfully!"
+echo ""
+echo "Access MongoDB via:"
+echo "- HestiaCP Panel: https://your-server:8083 (look for MongoDB button)"
+echo "- Direct Adminer: https://your-server:8083/adminer/?mongo=&db="
+echo ""
+echo "Default connection:"
+echo "- Server: localhost:27017"
+echo "- Username: (leave empty if no auth)"
+echo "- Password: (leave empty if no auth)"
