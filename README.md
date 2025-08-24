@@ -6,14 +6,54 @@ MongoDB administration interface that integrates with HestiaCP alongside phpMyAd
 
 ⚠️ **IMPORTANT**: This plugin does NOT install MongoDB. You must install MongoDB manually first.
 
-### 1. Install MongoDB
+### 1. Install MongoDB 8.0 (Latest Version)
 
+**Step 1: Update System**
 ```bash
-# Install MongoDB 7.0 (Ubuntu/Debian)
-curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-sudo apt update && sudo apt install -y mongodb-org
-sudo systemctl enable mongod && sudo systemctl start mongod
+sudo apt update && sudo apt upgrade -y
+```
+
+**Step 2: Import MongoDB GPG Key**
+```bash
+curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | \
+   sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg \
+   --dearmor
+```
+
+**Step 3: Add MongoDB Repository**
+Choose the command for your Ubuntu version:
+
+**Ubuntu 24.04 (Noble):**
+```bash
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+```
+
+**Ubuntu 22.04 (Jammy):**
+```bash
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+```
+
+**Ubuntu 20.04 (Focal):**
+```bash
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+```
+
+**Step 4: Install MongoDB**
+```bash
+sudo apt update
+sudo apt install -y mongodb-org
+```
+
+**Step 5: Start and Enable MongoDB**
+```bash
+sudo systemctl start mongod
+sudo systemctl enable mongod
+```
+
+**Step 6: Verify Installation**
+```bash
+sudo systemctl status mongod
+mongod --version
 ```
 
 ### 2. Install PHP MongoDB Extension

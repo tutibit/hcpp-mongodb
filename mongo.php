@@ -1,7 +1,7 @@
 <?php
 namespace Adminer;
 
-add_driver("mongo", "MongoDB (alpha)");
+add_driver("mongo", "MongoDB 8.0");
 
 if (isset($_GET["mongo"])) {
 	define('Adminer\DRIVER', "mongo");
